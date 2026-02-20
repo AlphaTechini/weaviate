@@ -324,14 +324,113 @@ Total:             17 revisions
 3. Ensure mock responses match expected structure
 4. Run with `-v` flag for detailed output
 
+### **If Git Push Fails** (SSH Key Issues):
+**Problem**: `ERROR: Permission denied to JnrDevClaw`
+
+**Root Cause**: SSH key is registered to different GitHub account than your fork owner.
+
+**Solution** (as implemented on Feb 20, 2026):
+```bash
+# 1. Force HTTPS instead of SSH
+git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+
+# 2. Verify remote is using HTTPS
+git remote -v
+# Should show: origin https://@github.com/AlphaTechini/weaviate.git
+
+# 3. Push using GitHub CLI token for authentication
+GH_TOKEN=$(gh auth token) git push origin main
+
+# Expected output:
+# To https://github.com/AlphaTechini/weaviate.git
+#    72a6eb98e4..5172937bf6  main -> main
+```
+
+**Alternative**: Use personal access token directly:
+```bash
+git push https://YOUR_TOKEN@github.com/AlphaTechini/weaviate.git main
+```
+
 ### **Common Gotchas**:
 - ❌ `true` vs ✅ `boolPtr(true)`
 - ❌ `data[key]` vs ✅ `data.(map[string]interface{})[key]`
 - ❌ Wrong import prefix vs ✅ `github.com/weaviate/weaviate/...`
+- ❌ SSH when you need HTTPS vs ✅ Use `git config url.https://...insteadOf`
+
+---
+
+## 🚀 Deployment Log - February 20, 2026
+
+### **Initial Push Attempt** (Failed)
+```bash
+git push origin main
+# ERROR: Permission to AlphaTechini/weaviate.git denied to JnrDevClaw.
+```
+
+**Diagnosis**: SSH key authenticated as "JnrDevClaw" instead of "AlphaTechini"
+
+### **Resolution Steps**:
+
+**Step 1**: Check current remote
+```bash
+git remote -v
+# origin ssh://git@github.com/AlphaTechini/weaviate.git
+```
+
+**Step 2**: Try changing remote URL (didn't work - Git was forcing SSH)
+```bash
+git remote set-url origin https://github.com/AlphaTechini/weaviate.git
+# Still showed SSH in git remote -v
+```
+
+**Step 3**: Remove and re-add remote (still didn't work)
+```bash
+git remote remove origin
+git remote add origin https://github.com/AlphaTechini/weaviate.git
+# Still converted back to SSH
+```
+
+**Step 4**: Force HTTPS globally (SUCCESS!)
+```bash
+# Remove any SSH URL rewriting
+git config --global --remove-section url."ssh://git@github.com/"
+
+# Force HTTPS for all GitHub operations
+git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+
+# Verify
+git remote -v
+# origin https://@github.com/AlphaTechini/weaviate.git ✅
+```
+
+**Step 5**: Push with GitHub CLI authentication
+```bash
+GH_TOKEN=$(gh auth token) git push origin main
+
+# Success!
+To https://github.com/AlphaTechini/weaviate.git
+   72a6eb98e4..5172937bf6  main -> main
+```
+
+### **Lessons Learned**:
+1. **Git can force SSH** via global config even when remote shows HTTPS
+2. **GitHub CLI uses SSH by default** if available
+3. **`url.*.insteadOf`** is the reliable way to force HTTPS
+4. **`GH_TOKEN` env var** works better than credential helpers for one-off pushes
+
+### **Best Practice for Future**:
+```bash
+# Before first push, always run:
+git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+
+# Then push with:
+GH_TOKEN=$(gh auth token) git push origin main
+```
 
 ---
 
 **Last Updated**: February 20, 2026  
 **Total Development Time**: ~4 hours  
 **Iterations**: 17 major revisions  
-**Final Status**: ✅ All builds passing, 30/30 tests green
+**Push Iterations**: 4 attempts  
+**Final Status**: ✅ All builds passing, 30/30 tests green, successfully deployed to GitHub
